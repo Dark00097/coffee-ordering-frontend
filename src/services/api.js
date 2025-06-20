@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL || 'https://yourapp.railway.app'}/api`, // Replace with your Railway domain
+  baseURL: `${import.meta.env.VITE_API_URL || 'https://coffee-ordering-backend-production.up.railway.app'}/api`,
   withCredentials: true,
 });
 
