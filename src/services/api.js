@@ -3,6 +3,7 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL || 'https://coffee-ordering-backend-production.up.railway.app'}/api`,
   withCredentials: true,
+  timeout: 10000,
 });
 
 api.interceptors.request.use(
@@ -32,14 +33,19 @@ api.interceptors.response.use(
   }
 );
 
-// Session API method (fallback to check-auth)
-api.getSession = async () => {
-  try {
-    const response = await api.get('/check-auth');
-    return { data: { sessionId: response.data?.id || response.data?.user?.id } };
-  } catch (error) {
-    console.warn('Falling back to anonymous session due to /check-auth error:', error.message);
-    return { data: { sessionId: `guest-${Date.now()}` } };
+// Session API method with retry
+api.getSession = async (retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await api.get('/check-auth');
+      return { data: { sessionId: response.data?.id || response.data?.user?.id || `guest-${Date.now()}` } };
+    } catch (error) {
+      if (i === retries - 1) {
+        console.warn('Falling back to anonymous session due to /check-auth error:', error.message);
+        return { data: { sessionId: `guest-${Date.now()}` } };
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+    }
   }
 };
 
