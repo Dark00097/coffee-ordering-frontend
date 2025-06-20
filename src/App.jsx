@@ -43,7 +43,8 @@ function App() {
   const [latestOrderId, setLatestOrderId] = useState(null);
   const [user, setUser] = useState(null);
   const [sessionId, setSessionId] = useState(null);
-  const [cleanupSocket, setCleanupSocket] = useState(() => {});
+  const [isLoading, setIsLoading] = useState(true);
+  const [cleanupSocket, setCleanupSocket] = useState(() => () => {});
 
   const handleNewNotification = (notification) => {
     if (!notification.id) {
@@ -55,49 +56,55 @@ function App() {
 
   useEffect(() => {
     const initializeApp = async () => {
+      setIsLoading(true);
       try {
         const response = await api.getSession();
         const serverSessionId = response.data.sessionId;
         setSessionId(serverSessionId);
+        localStorage.setItem('sessionId', serverSessionId);
         api.defaults.headers.common['X-Session-Id'] = serverSessionId;
+
+        const socketCleanup = initSocket(
+          (data) => setLatestOrderId(data.orderId),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          (data) => setLatestOrderId(data.orderId),
+          handleNewNotification
+        );
+        setCleanupSocket(() => socketCleanup);
+
+        const checkAuth = async () => {
+          try {
+            const res = await api.get('/check-auth');
+            setUser(res.data);
+          } catch (err) {
+            setUser(null);
+          }
+        };
+
+        const fetchPromotions = async () => {
+          try {
+            const response = await api.get('/promotions');
+            setPromotions(response.data || []);
+          } catch (error) {
+            toast.error(error.response?.data?.error || 'Failed to load promotions');
+            setPromotions([]);
+          }
+        };
+
+        await Promise.all([checkAuth(), fetchPromotions()]);
       } catch (error) {
-        console.error('Error fetching session ID:', error);
-        const fallbackSessionId = `guest-${Date.now()}`;
+        console.error('Error initializing app:', error);
+        const fallbackSessionId = localStorage.getItem('sessionId') || `guest-${uuidv4()}`;
         setSessionId(fallbackSessionId);
+        localStorage.setItem('sessionId', fallbackSessionId);
         api.defaults.headers.common['X-Session-Id'] = fallbackSessionId;
+        setError('Failed to connect to server. Some features may be limited.');
+      } finally {
+        setIsLoading(false);
       }
-
-      const checkAuth = async () => {
-        try {
-          const res = await api.get('/check-auth');
-          setUser(res.data);
-        } catch (err) {
-          setUser(null);
-        }
-      };
-
-      const fetchPromotions = async () => {
-        try {
-          const response = await api.get('/promotions');
-          setPromotions(response.data || []);
-        } catch (error) {
-          toast.error(error.response?.data?.error || 'Failed to load promotions');
-          setPromotions([]);
-        }
-      };
-
-      const socketCleanup = initSocket(
-        (data) => setLatestOrderId(data.orderId),
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        (data) => setLatestOrderId(data.orderId),
-        handleNewNotification
-      );
-      setCleanupSocket(() => socketCleanup);
-
-      await Promise.all([checkAuth(), fetchPromotions()]);
     };
 
     initializeApp();
@@ -147,7 +154,7 @@ function App() {
 
     setCart((prev) => {
       if (item.item_id) {
-        const itemKey = `${item.item_id}_${item.supplement_id || 'no-supplement'}`;
+        const itemKey = `${item.item_id}_${item.supplement_id || 'no-supplement_id'}`;
         const existingItem = prev.find(
           (cartItem) => `${cartItem.item_id}_${cartItem.supplement_id || 'no-supplement'}` === itemKey
         );
@@ -188,11 +195,11 @@ function App() {
         if (existingItem) {
           return prev.map((cartItem) =>
             cartItem.cartItemId === existingItem.cartItemId
-              ? {
-                  ...cartItem,
-                  quantity: cartItem.quantity + (item.quantity || 1),
-                }
-              : cartItem
+            ? {
+                ...cartItem,
+                quantity: cartItem.quantity + (item.quantity || 1),
+              }
+            : cartItem
           );
         }
         return [
@@ -238,29 +245,29 @@ function App() {
               .filter((cartItem) => cartItem.cartItemId !== cartItemId)
               .map((cartItem) =>
                 cartItem.cartItemId === existingItem.cartItemId
-                  ? {
-                      ...cartItem,
-                      quantity: cartItem.quantity + quantity,
-                      supplement_id: supplement.supplement_id,
-                      supplement_name: supplement.supplement_name,
-                      supplement_price: parseFloat(supplement.supplement_price || 0),
-                    }
-                  : cartItem
+                ? {
+                  ...cartItem,
+                  quantity: cartItem.quantity + quantity,
+                  supplement_id: supplement.supplement_id,
+                  supplement_name: supplement.supplement_name,
+                  supplement_price: parseFloat(supplement.supplement_price || 0),
+                }
+              : cartItem
               );
           }
 
           return prev.map((cartItem) =>
             cartItem.cartItemId === cartItemId
-              ? {
-                  ...cartItem,
-                  quantity,
-                  ...(supplement && {
-                    supplement_id: supplement.supplement_id,
-                    supplement_name: supplement.supplement_name,
-                    supplement_price: parseFloat(supplement.supplement_price || 0),
-                  }),
-                }
-              : cartItem
+            ? {
+              ...cartItem,
+              quantity,
+              ...(supplement && {
+                supplement_id: supplement.supplement_id,
+                supplement_name: supplement.supplement_name,
+                supplement_price: parseFloat(supplement.supplement_price || 0),
+              }),
+            }
+            : cartItem
           );
         }
 
@@ -279,27 +286,27 @@ function App() {
               .filter((cartItem) => cartItem.cartItemId !== cartItemId)
               .map((cartItem) =>
                 cartItem.cartItemId === existingItem.cartItemId
-                  ? {
-                      ...cartItem,
-                      quantity: cartItem.quantity + quantity,
-                      option_ids: options.option_ids,
-                      options: options.options,
-                    }
-                  : cartItem
+                ? {
+                  ...cartItem,
+                  quantity: cartItem.quantity + quantity,
+                  option_ids: options.option_ids,
+                  options: options.options,
+                }
+              : cartItem
               );
           }
 
           return prev.map((cartItem) =>
             cartItem.cartItemId === cartItemId
-              ? {
-                  ...cartItem,
-                  quantity,
-                  ...(options && {
-                    option_ids: options.option_ids,
-                    options: options.options,
-                  }),
-                }
-              : cartItem
+            ? {
+              ...cartItem,
+              quantity,
+              ...(options && {
+                option_ids: options.option_ids,
+                options: options.options,
+              }),
+            }
+            : cartItem
           );
         }
 
@@ -328,8 +335,8 @@ function App() {
     return <div style={{ textAlign: 'center', padding: '20px', color: 'red' }}>{error}</div>;
   }
 
-  if (!sessionId) {
-    return <div style={{ textAlign: 'center', padding: '20px' }}>Initializing session...</div>;
+  if (isLoading || !sessionId) {
+    return <div style={{ textAlign: 'center', padding: '20px' }}>Loading...</div>;
   }
 
   return (
@@ -403,10 +410,10 @@ function App() {
         />
         <Route path="/category/:id" element={<CategoryMenu addToCart={addToCart} />} />
         <Route path="/product/:id" element={<ProductDetails addToCart={addToCart} latestOrderId={latestOrderId} />} />
-        <Route path="/order-waiting/:orderId" element={<OrderWaiting sessionId={sessionId} />} />
+        <Route path="/order-waiting/:orderId" element={<OrderWaiting sessionId={sessionId} />} /> {/* commented out to resolve issue with order waiting page */}
         <Route path="/breakfast" element={<BreakfastMenu addToCart={addToCart} />} />
-        <Route path="/breakfast/:id" element={<BreakfastMenu addToCart={addToCart} />} />
-        <Route path="*" element={<div style={{ textAlign: 'center', color: '#666' }}>404 Not Found</div>} />
+        <Route path="/breakfast/:id" element={<BreakfastMenu addToCart={addToCart} />} /> {/* Added for single breakfast */}
+        <Route path="*" element={<div style={{ textAlign: 'center', color: '#666' }}>404 Not Found</div>} />}
       </Routes>
       <CartModal
         isOpen={isCartOpen}
