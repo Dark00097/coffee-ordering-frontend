@@ -32,6 +32,17 @@ api.interceptors.response.use(
   }
 );
 
+// Session API method (fallback to check-auth)
+api.getSession = async () => {
+  try {
+    const response = await api.get('/check-auth');
+    return { data: { sessionId: response.data?.id || response.data?.user?.id } };
+  } catch (error) {
+    console.warn('Falling back to anonymous session due to /check-auth error:', error.message);
+    return { data: { sessionId: `guest-${Date.now()}` } };
+  }
+};
+
 // Notification API methods
 api.getNotifications = (params) => api.get('/notifications', { params });
 api.markNotificationRead = (id) => api.put(`/notifications/${id}/read`);
@@ -78,7 +89,6 @@ api.searchMenuItems = (query) => api.get('/menu-items/search', { params: { query
 api.submitOrder = (data) => api.post('/orders', data);
 api.approveOrder = (id) => api.post(`/orders/${id}/approve`);
 api.getOrder = (id) => api.get(`/orders/${id}`);
-api.getSession = () => api.get('/session');
 
 // Banner API methods
 api.getBanners = (params) => api.get('/banners', { params });
