@@ -1,14 +1,13 @@
+// src/services/socket.js
 import io from 'socket.io-client';
 import { api } from './api';
 
-const socket = io(import.meta.env.VITE_API_URL || 'https://coffee-ordering-backend-production.up.railway.app'), {
+const socket = io(import.meta.env.VITE_API_URL, {
   withCredentials: true,
   reconnection: true,
-  reconnectionAttempts: 3,
+  reconnectionAttempts: 10,
   reconnectionDelay: 1000,
-  ,
   reconnectionDelayMax: 5000,
-  timeout: 10000,
 });
 
 export const initSocket = (
@@ -88,11 +87,7 @@ export const initSocket = (
       });
 
       socket.on('reconnect_error', (error) => {
-        console.error('Socket reconnection error:', error.message);
-      });
-
-      socket.on('connect_error', (error) => {
-        console.error('Socket connection error:', error.message);
+        console.error('Socket reconnection error:', error);
       });
 
       cleanup = () => {
@@ -111,7 +106,7 @@ export const initSocket = (
 
       console.log('Socket initialized with session:', sessionId);
     } catch (error) {
-      console.error('Error initializing socket:', error.message);
+      console.error('Error initializing socket:', error);
     }
   };
 
