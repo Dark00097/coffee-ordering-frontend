@@ -2,7 +2,7 @@
 import io from 'socket.io-client';
 import { api } from './api';
 
-const socket = io(import.meta.env.VITE_API_URL || 'http://192.168.1.13:5000', {
+const socket = io(import.meta.env.VITE_API_URL || 'https://coffee-ordering-backend-production.up.railway.app', {
   withCredentials: true,
   reconnection: true,
   reconnectionAttempts: 10,
