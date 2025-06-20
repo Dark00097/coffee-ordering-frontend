@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { api } from './services/api';
 import { v4 as uuidv4 } from 'uuid';
+import { initSocket } from './services/socket';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
@@ -42,6 +43,7 @@ function App() {
   const [latestOrderId, setLatestOrderId] = useState(null);
   const [user, setUser] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const [cleanupSocket, setCleanupSocket] = useState(() => {});
 
   const handleNewNotification = (notification) => {
     if (!notification.id) {
@@ -54,23 +56,14 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        const response = await api.get('/session');
+        const response = await api.getSession();
         const serverSessionId = response.data.sessionId;
-        if (serverSessionId) {
-          setSessionId(serverSessionId);
-          localStorage.setItem('sessionId', serverSessionId);
-          api.defaults.headers.common['X-Session-Id'] = serverSessionId;
-        } else {
-          const fallbackSessionId = localStorage.getItem('sessionId') || `guest-${uuidv4()}`;
-          setSessionId(fallbackSessionId);
-          localStorage.setItem('sessionId', fallbackSessionId);
-          api.defaults.headers.common['X-Session-Id'] = fallbackSessionId;
-        }
+        setSessionId(serverSessionId);
+        api.defaults.headers.common['X-Session-Id'] = serverSessionId;
       } catch (error) {
         console.error('Error fetching session ID:', error);
-        const fallbackSessionId = localStorage.getItem('sessionId') || `guest-${uuidv4()}`;
+        const fallbackSessionId = `guest-${Date.now()}`;
         setSessionId(fallbackSessionId);
-        localStorage.setItem('sessionId', fallbackSessionId);
         api.defaults.headers.common['X-Session-Id'] = fallbackSessionId;
       }
 
@@ -93,12 +86,25 @@ function App() {
         }
       };
 
+      const socketCleanup = initSocket(
+        (data) => setLatestOrderId(data.orderId),
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        (data) => setLatestOrderId(data.orderId),
+        handleNewNotification
+      );
+      setCleanupSocket(() => socketCleanup);
+
       await Promise.all([checkAuth(), fetchPromotions()]);
     };
 
     initializeApp();
 
-    return () => {};
+    return () => {
+      if (cleanupSocket) cleanupSocket();
+    };
   }, []);
 
   const handleLogin = (user) => {
@@ -114,6 +120,17 @@ function App() {
       setDeliveryAddress('');
       setPromotionId('');
       setIsCartOpen(false);
+      if (cleanupSocket) cleanupSocket();
+      const socketCleanup = initSocket(
+        (data) => setLatestOrderId(data.orderId),
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        (data) => setLatestOrderId(data.orderId),
+        handleNewNotification
+      );
+      setCleanupSocket(() => socketCleanup);
       toast.success('Successfully logged out');
       navigate('/');
     } catch (error) {
@@ -328,25 +345,67 @@ function App() {
         <Route path="/categories" element={<CategoryList />} />
         <Route path="/reservations" element={<Reservations />} />
         <Route path="/login" element={<Login onLogin={handleLogin} />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/staff" element={<StaffDashboard user={user} handleNewNotification={handleNewNotification} />} />
-        <Route path="/admin/add-menu-item" element={<AddMenuItem />} />
-        <Route path="/admin/categories" element={<Categories />} />
-        <Route path="/admin/manage-menu-items" element={<ManageMenuItems />} />
-        <Route path="/admin/supplements" element={<ManageSupplements />} />
-        <Route path="/admin/tables" element={<TableManagement />} />
-        <Route path="/admin/orders" element={<OrderManagement />} />
-        <Route path="/admin/users" element={<UserManagement />} />
-        <Route path="/admin/promotions" element={<PromotionManagement />} />
-        <Route path="/admin/banners" element={<BannerManagement />} />
-        <Route path="/admin/breakfasts" element={<AdminBreakfasts />} />
-        <Route path="/admin/table-reservations" element={<AdminTableReservations />} />
-        <Route path="/staff/table-reservations" element={<StaffTableReservations />} />
+        <Route
+          path="/admin"
+          element={user && user.role === 'admin' ? <AdminDashboard /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/staff"
+          element={user && user.role === 'server' ? <StaffDashboard user={user} handleNewNotification={handleNewNotification} /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/add-menu-item"
+          element={user && user.role === 'admin' ? <AddMenuItem /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/categories"
+          element={user && user.role === 'admin' ? <Categories /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/manage-menu-items"
+          element={user && user.role === 'admin' ? <ManageMenuItems /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/supplements"
+          element={user && user.role === 'admin' ? <ManageSupplements /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/tables"
+          element={user && user.role === 'admin' ? <TableManagement /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/orders"
+          element={user && user.role === 'admin' ? <OrderManagement /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/users"
+          element={user && user.role === 'admin' ? <UserManagement /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/promotions"
+          element={user && user.role === 'admin' ? <PromotionManagement /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/banners"
+          element={user && user.role === 'admin' ? <BannerManagement /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/breakfasts"
+          element={user && user.role === 'admin' ? <AdminBreakfasts /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/admin/table-reservations"
+          element={user && user.role === 'admin' ? <AdminTableReservations /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/staff/table-reservations"
+          element={user && user.role === 'server' ? <StaffTableReservations /> : <Login onLogin={handleLogin} />}
+        />
         <Route path="/category/:id" element={<CategoryMenu addToCart={addToCart} />} />
         <Route path="/product/:id" element={<ProductDetails addToCart={addToCart} latestOrderId={latestOrderId} />} />
         <Route path="/order-waiting/:orderId" element={<OrderWaiting sessionId={sessionId} />} />
-        <Route path="/breakfast" element={<BreakfastMenu addToCart={addToCart} />} /> {/* Updated to /breakfast for full menu */}
-        <Route path="/breakfast/:id" element={<BreakfastMenu addToCart={addToCart} />} /> {/* Added for single breakfast */}
+        <Route path="/breakfast" element={<BreakfastMenu addToCart={addToCart} />} />
+        <Route path="/breakfast/:id" element={<BreakfastMenu addToCart={addToCart} />} />
         <Route path="*" element={<div style={{ textAlign: 'center', color: '#666' }}>404 Not Found</div>} />
       </Routes>
       <CartModal
